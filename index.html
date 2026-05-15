@@ -3,103 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Noah's Chess Game</title>
+    <title>Noah's Chess</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         :root {
-            --bg: #0f172a;
-            --surface: #1e293b;
+            --bg: #0b0f1a;
+            --surface: #161e2d;
             --accent: #10b981;
-            --accent-dark: #065f46;
-            --light-sq: #e2e8f0;
-            --dark-sq: #64748b;
-            --radius: 20px;
+            --magic: #6366f1;
+            --danger: #ef4444;
+            --light-sq: #f1f5f9;
+            --dark-sq: #475569;
+            --radius: 24px;
         }
 
-        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        body { background: var(--bg); color: white; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; overflow: hidden; }
+        
+        #app { width: 95vw; max-width: 480px; display: flex; flex-direction: column; gap: 15px; animation: fadeIn 0.5s ease; }
 
-        body {
-            background-color: var(--bg);
-            color: white;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            overflow: hidden;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        #app { width: 95vw; max-width: 500px; display: flex; flex-direction: column; gap: 12px; }
-
-        /* --- UI PANELS --- */
+        /* --- HUD --- */
         .panel {
-            background: var(--surface);
-            padding: 12px 20px;
-            border-radius: var(--radius);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-            border: 2px solid transparent;
-            transition: 0.3s;
+            background: var(--surface); padding: 15px 20px; border-radius: var(--radius);
+            display: flex; justify-content: space-between; align-items: center;
+            border: 2px solid rgba(255,255,255,0.05); transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
+        .panel.active { border-color: var(--magic); transform: scale(1.03); box-shadow: 0 0 25px rgba(99, 102, 241, 0.3); }
+        .timer { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+        .name-tag { display: flex; flex-direction: column; gap: 2px; }
+        .name-tag span { font-size: 0.7rem; text-transform: uppercase; opacity: 0.5; font-weight: 700; }
+        .name-tag b { font-size: 1.1rem; color: #fff; }
 
-        .panel.active { border-color: var(--accent); transform: scale(1.02); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
-        .timer { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-        .name-label { font-size: 0.8rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
-
-        /* --- RIGID BOARD --- */
-        #board-wrapper {
-            width: 100%;
-            aspect-ratio: 1/1;
-            background: var(--surface);
-            border-radius: 12px;
-            padding: 5px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
-
-        #board-container {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            grid-template-rows: repeat(8, 1fr);
-            width: 100%;
-            height: 100%;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-
-        .square { position: relative; display: flex; justify-content: center; align-items: center; cursor: pointer; }
-        .square:hover { filter: brightness(1.1); }
+        /* --- BOARD --- */
+        #board-wrapper { width: 100%; aspect-ratio: 1/1; background: var(--surface); border-radius: 18px; padding: 6px; box-shadow: 0 25px 60px rgba(0,0,0,0.6); position: relative; }
+        #board-container { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; height: 100%; border-radius: 12px; overflow: hidden; }
+        
+        .square { position: relative; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+        .square:hover { filter: brightness(1.15); z-index: 2; }
         .light { background-color: var(--light-sq); }
         .dark { background-color: var(--dark-sq); }
-        .piece { width: 90%; height: 90%; object-fit: contain; pointer-events: none; z-index: 5; }
+        .piece { width: 92%; height: 92%; object-fit: contain; pointer-events: none; z-index: 5; transition: transform 0.2s; }
+        .square:active .piece { transform: scale(0.8); }
 
-        .hint::after {
-            content: ''; width: 24%; height: 24%; background: var(--accent);
-            border-radius: 50%; box-shadow: 0 0 10px var(--accent); position: absolute;
-        }
+        /* Markers */
+        .hint::after { content: ''; width: 22%; height: 22%; background: var(--accent); border-radius: 50%; opacity: 0.5; position: absolute; }
+        .last-move { background: rgba(255, 255, 0, 0.3) !important; }
+        .check { background: radial-gradient(circle, var(--danger) 0%, transparent 70%) !important; animation: pulseCheck 1s infinite; }
 
-        /* --- OVERLAYS & INPUTS --- */
-        .overlay { background: var(--surface); padding: 30px; border-radius: var(--radius); text-align: center; }
+        @keyframes pulseCheck { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* --- UI OVERLAY --- */
+        .overlay { background: var(--surface); padding: 40px 30px; border-radius: var(--radius); text-align: center; border: 1px solid rgba(255,255,255,0.1); }
         .btn {
-            background: var(--accent); color: var(--bg); border: none; padding: 16px;
-            border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer;
-            width: 100%; margin-top: 10px; transition: 0.2s; box-shadow: 0 4px 0 var(--accent-dark);
+            background: var(--magic); color: white; border: none; padding: 18px; border-radius: 16px;
+            font-weight: 700; font-size: 1rem; cursor: pointer; width: 100%; margin-top: 12px;
+            transition: 0.3s; box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
         }
-        .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
-        .btn:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
-
-        input {
-            width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #334155;
-            background: #0f172a; color: var(--accent); text-align: center;
-            font-size: 1.2rem; font-weight: 700; margin-bottom: 10px;
+        .btn:hover { transform: translateY(-3px); filter: brightness(1.2); box-shadow: 0 8px 25px rgba(99, 102, 241, 0.4); }
+        .btn:active { transform: translateY(1px); }
+        
+        input { 
+            width: 100%; padding: 16px; border-radius: 14px; border: 2px solid #334155; 
+            background: #0b0f1a; color: var(--accent); text-align: center; font-size: 1.2rem; font-weight: 700; margin-bottom: 15px; 
         }
-
-        #lobby-code-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 20px 0; }
-        #lobby-code { color: var(--accent); font-size: 2.2rem; font-weight: 700; letter-spacing: 3px; }
-        .copy-btn { width: auto; padding: 10px 20px; margin: 0; font-size: 0.8rem; }
 
         .hidden { display: none !important; }
     </style>
@@ -108,31 +79,17 @@
 
 <div id="app">
     <div id="view-menu" class="overlay">
-        <h1 style="margin-bottom: 10px;">Noah's Chess</h1>
-        <p style="opacity: 0.6; margin-bottom: 25px;">Personalizza il tuo profilo</p>
+        <h1 style="color: var(--accent); margin:0; font-size: 2.5rem;">Noah's Chess</h1>
+        <p style="opacity:0.6; margin-bottom:30px;">Pronto alla sfida?</p>
         <input type="text" id="user-name" placeholder="Il tuo nome..." maxlength="12">
-        <button class="btn" onmouseenter="playSfx('hover')" onclick="saveName(); initHost()">HOST GAME</button>
-        <button class="btn" onmouseenter="playSfx('hover')" onclick="saveName(); showJoin()" style="background: transparent; color: white; border: 2px solid #334155; box-shadow: none;">JOIN GAME</button>
-    </div>
-
-    <div id="view-host" class="overlay hidden">
-        <p>Invia il codice all'amico</p>
-        <div id="lobby-code-row">
-            <div id="lobby-code">---</div>
-            <button class="btn copy-btn" id="copy-btn" onclick="copyId()">COPIA</button>
-        </div>
-        <p style="opacity: 0.5;">In attesa di connessione...</p>
-    </div>
-
-    <div id="view-join" class="overlay hidden">
-        <p>Inserisci codice stanza</p>
-        <input type="text" id="join-input" maxlength="5">
-        <button class="btn" onclick="initJoin()">ENTRA</button>
+        <button class="btn" onmouseenter="playSfx('hover')" onclick="startAiGame()">SFIDA L'AI</button>
+        <button class="btn" onmouseenter="playSfx('hover')" onclick="initHost()" style="background: var(--surface); border: 1px solid var(--magic);">CREA MATCH ONLINE</button>
+        <button class="btn" onmouseenter="playSfx('hover')" onclick="showJoin()" style="background: transparent; border: 1px solid #334155;">ENTRA CON CODICE</button>
     </div>
 
     <div id="view-game" class="hidden">
         <div id="panel-opp" class="panel">
-            <div><span class="name-label">AVVERSARIO</span><br><b id="opp-display-name">...</b></div>
+            <div class="name-tag"><span>Avversario</span><b id="opp-name">AI NOAH</b></div>
             <div class="timer" id="timer-opp">10:00</div>
         </div>
 
@@ -141,120 +98,125 @@
         </div>
 
         <div id="panel-me" class="panel">
-            <div><span class="name-label">TU</span><br><b id="me-display-name">Noah</b></div>
+            <div class="name-tag"><span>Tu</span><b id="me-name">NOAH</b></div>
             <div class="timer" id="timer-me">10:00</div>
         </div>
     </div>
+
+    <div id="view-host" class="overlay hidden">
+        <p>Invia il codice al tuo amico</p>
+        <h2 id="lobby-code" style="color: var(--accent); font-size: 2.5rem; letter-spacing: 4px;">---</h2>
+        <button class="btn" onclick="copyId()">COPIA CODICE</button>
+        <button class="btn" onclick="location.reload()" style="background:transparent;">ANNULLA</button>
+    </div>
+    
+    <div id="view-join" class="overlay hidden">
+        <p>Inserisci codice stanza</p>
+        <input type="text" id="join-input" placeholder="ABCDE">
+        <button class="btn" onclick="initJoin()">COLLEGATI</button>
+        <button class="btn" onclick="location.reload()" style="background:transparent;">INDIETRO</button>
+    </div>
 </div>
 
-<audio id="sfx-hover" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
-<audio id="sfx-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
 <audio id="sfx-move" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/audio/move-self.mp3"></audio>
 <audio id="sfx-capture" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/audio/capture.mp3"></audio>
-<audio id="sfx-turn" src="https://assets.mixkit.co/active_storage/sfx/2045/2045-preview.mp3"></audio>
+<audio id="sfx-check" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/audio/move-check.mp3"></audio>
+<audio id="sfx-hover" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+<audio id="sfx-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+<audio id="sfx-gameover" src="https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3"></audio>
 
 <script>
     const chess = new Chess();
-    let peer, conn, myColor, myName;
-    let selectedSquare = null;
-    let timers = { w: 600, b: 600 };
-    let timerInterval = null;
+    let peer, conn, myColor = 'w', myName, isAiMode = false;
+    let selectedSquare = null, timers = { w: 600, b: 600 }, timerInterval = null;
+    let lastMove = null;
 
-    // Inizializzazione Nome
-    window.onload = () => {
-        const saved = localStorage.getItem('noah_chess_name');
-        if (saved) document.getElementById('user-name').value = saved;
+    // --- BLOCCARE BACK BUTTON & EXIT ---
+    window.addEventListener('popstate', (e) => {
+        if (confirm("Vuoi davvero abbandonare la partita?")) {
+            location.reload();
+        } else {
+            history.pushState(null, null, window.location.pathname);
+        }
+    });
+
+    window.onbeforeunload = () => {
+        if (!chess.game_over()) return "Se esci ora perderai i progressi!";
     };
 
-    function saveName() {
-        myName = document.getElementById('user-name').value || "Giocatore";
-        localStorage.setItem('noah_chess_name', myName);
-        document.getElementById('me-display-name').innerText = myName;
+    function playSfx(id) {
+        const a = document.getElementById('sfx-' + id);
+        if (a) { a.currentTime = 0; a.volume = id === 'hover' ? 0.2 : 0.6; a.play().catch(()=>{}); }
     }
 
-    function playSfx(type) {
-        const audio = document.getElementById('sfx-' + type);
-        audio.currentTime = 0;
-        audio.volume = type === 'hover' ? 0.15 : 0.6;
-        audio.play().catch(() => {});
+    // --- AI STRATEGICA ---
+    function evaluateBoard(game) {
+        let total = 0;
+        const weights = { p: 10, n: 32, b: 33, r: 50, q: 90, k: 900 };
+        game.board().forEach(row => row.forEach(p => {
+            if (p) total += weights[p.type] * (p.color === 'w' ? 1 : -1);
+        }));
+        return total;
     }
 
-    function copyId() {
-        const code = document.getElementById('lobby-code').innerText;
-        navigator.clipboard.writeText(code);
-        const btn = document.getElementById('copy-btn');
-        btn.innerText = "COPIATO!";
-        btn.style.background = "#fff";
-        setTimeout(() => { btn.innerText = "COPIA"; btn.style.background = "var(--accent)"; }, 2000);
-        playSfx('click');
-    }
-
-    function initHost() {
-        const id = Math.random().toString(36).substring(2, 7).toUpperCase();
-        peer = new Peer(id);
-        document.getElementById('lobby-code').innerText = id;
-        switchView('view-host');
-        peer.on('connection', c => { 
-            conn = c; 
-            myColor = 'w'; 
-            conn.on('open', () => {
-                conn.send({ type: 'init', name: myName });
-                startGame();
-            });
-        });
-    }
-
-    function showJoin() { switchView('view-join'); }
-
-    function initJoin() {
-        const id = document.getElementById('join-input').value.toUpperCase();
-        peer = new Peer();
-        peer.on('open', () => {
-            conn = peer.connect(id);
-            myColor = 'b';
-            conn.on('open', () => {
-                conn.send({ type: 'init', name: myName });
-                startGame();
-            });
-        });
-    }
-
-    function startGame() {
-        switchView('view-game');
-        renderBoard();
-        if(!timerInterval) timerInterval = setInterval(tick, 1000);
-
-        conn.on('data', data => {
-            if(data.type === 'init') {
-                document.getElementById('opp-display-name').innerText = data.name;
+    function minimax(game, depth, alpha, beta, isMax) {
+        if (depth === 0) return -evaluateBoard(game);
+        const moves = game.moves();
+        if (isMax) {
+            let best = -9999;
+            for (let m of moves) {
+                game.move(m);
+                best = Math.max(best, minimax(game, depth-1, alpha, beta, false));
+                game.undo(); alpha = Math.max(alpha, best);
+                if (beta <= alpha) break;
             }
-            if(data.type === 'move') {
-                const move = chess.move(data.move);
-                timers = data.timers;
-                renderBoard();
-                playSfx(move.flags.includes('c') ? 'capture' : 'move');
-                if (chess.turn() === myColor) playSfx('turn');
+            return best;
+        } else {
+            let best = 9999;
+            for (let m of moves) {
+                game.move(m);
+                best = Math.min(best, minimax(game, depth-1, alpha, beta, true));
+                game.undo(); beta = Math.min(beta, best);
+                if (beta <= alpha) break;
             }
-        });
+            return best;
+        }
     }
 
-    function tick() {
-        timers[chess.turn()]--;
-        updateTimers();
-        if(timers[chess.turn()] <= 0) { clearInterval(timerInterval); alert("Tempo Scaduto!"); }
+    function makeAiMove() {
+        if (chess.game_over()) return;
+        setTimeout(() => {
+            const moves = chess.moves();
+            let bestMove = moves[0];
+            let bestValue = -9999;
+            moves.sort(() => Math.random() - 0.5);
+
+            for (let m of moves) {
+                chess.move(m);
+                let val = minimax(chess, 2, -10000, 10000, false);
+                chess.undo();
+                if (val > bestValue) { bestValue = val; bestMove = m; }
+            }
+
+            const m = chess.move(bestMove);
+            lastMove = { from: m.from, to: m.to };
+            handleMoveEffects(m);
+            renderBoard();
+        }, 600);
     }
 
-    function updateTimers() {
-        const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2, '0')}`;
-        document.getElementById('timer-me').innerText = fmt(timers[myColor]);
-        document.getElementById('timer-opp').innerText = fmt(timers[myColor === 'w' ? 'b' : 'w']);
+    function handleMoveEffects(m) {
+        if (chess.in_check()) playSfx('check');
+        else if (m.captured) playSfx('capture');
+        else playSfx('move');
+        
+        if (chess.game_over()) {
+            playSfx('gameover');
+            setTimeout(() => alert("PARTITA FINITA!"), 500);
+        }
     }
 
-    const pieceImgs = (t, c) => `https://upload.wikimedia.org/wikipedia/commons/${{
-        pw:'4/45/Chess_plt45', rw:'7/72/Chess_rlt45', nw:'7/70/Chess_nlt45', bw:'b/b1/Chess_blt45', qw:'1/15/Chess_qlt45', kw:'4/42/Chess_klt45',
-        pb:'c/c7/Chess_pdt45', rb:'f/ff/Chess_rdt45', nb:'e/ef/Chess_ndt45', bb:'9/98/Chess_bdt45', qb:'4/47/Chess_qdt45', kb:'f/f0/Chess_kdt45'
-    }[t+c]}.svg`;
-
+    // --- GAME ENGINE ---
     function renderBoard() {
         const container = document.getElementById('board-container');
         container.innerHTML = '';
@@ -265,56 +227,91 @@
 
         for (let i = 0; i < 8; i++) {
             for (let j = 0; j < 8; j++) {
-                const r = myColor === 'b' ? 7 - i : i;
-                const c = myColor === 'b' ? 7 - j : j;
-                const piece = board[r][c];
-                const sq = String.fromCharCode(97 + c) + (8 - r);
-
-                const div = document.createElement('div');
-                div.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
-                div.onmouseenter = () => playSfx('hover');
+                const r = myColor === 'b' ? 7-i : i;
+                const c = myColor === 'b' ? 7-j : j;
+                const p = board[r][c];
+                const sq = String.fromCharCode(97+c) + (8-r);
                 
-                if (piece) {
+                const d = document.createElement('div');
+                d.className = `square ${(r+c)%2===0?'light':'dark'}`;
+                
+                // Evidenzia Scacco
+                if (p && p.type === 'k' && p.color === chess.turn() && chess.in_check()) d.classList.add('check');
+
+                // Evidenzia Ultima Mossa
+                if (lastMove && (sq === lastMove.from || sq === lastMove.to)) d.classList.add('last-move');
+
+                if (p) {
                     const img = document.createElement('img');
-                    img.src = pieceImgs(piece.type, piece.color);
+                    img.src = `https://upload.wikimedia.org/wikipedia/commons/${getPiecePath(p.type, p.color)}.svg`;
                     img.className = 'piece';
-                    div.appendChild(img);
+                    d.appendChild(img);
                 }
-
-                if (selectedSquare === sq) div.style.background = "rgba(16, 185, 129, 0.4)";
-                if (selectedSquare && chess.moves({square: selectedSquare, verbose: true}).some(m => m.to === sq)) {
-                    div.classList.add('hint');
-                }
-
-                div.onclick = () => { playSfx('click'); handleSquare(sq); };
-                container.appendChild(div);
+                
+                if (selectedSquare === sq) d.style.background = "rgba(99, 102, 241, 0.5)";
+                if (selectedSquare && chess.moves({square:selectedSquare, verbose:true}).some(m=>m.to===sq)) d.classList.add('hint');
+                
+                d.onclick = () => { playSfx('click'); handleSquare(sq); };
+                container.appendChild(d);
             }
         }
+        if (isAiMode && chess.turn() !== myColor) makeAiMove();
     }
 
     function handleSquare(sq) {
         if (chess.turn() !== myColor) return;
-        const piece = chess.get(sq);
+        const p = chess.get(sq);
 
-        if (piece && piece.color === myColor) {
-            selectedSquare = sq;
-            renderBoard();
+        if (p && p.color === myColor) {
+            selectedSquare = sq; renderBoard();
         } else if (selectedSquare) {
-            const move = chess.move({ from: selectedSquare, to: sq, promotion: 'q' });
-            if (move) {
-                playSfx(move.flags.includes('c') ? 'capture' : 'move');
-                conn.send({ type: 'move', move: move, timers: timers });
+            const m = chess.move({ from: selectedSquare, to: sq, promotion: 'q' });
+            if (m) {
+                lastMove = { from: m.from, to: m.to };
+                handleMoveEffects(m);
+                if (conn) conn.send({ type: 'move', move: m, timers: timers });
                 selectedSquare = null;
                 renderBoard();
+            } else {
+                selectedSquare = null; renderBoard();
             }
         }
     }
 
-    function switchView(id) {
-        ['view-menu', 'view-host', 'view-join', 'view-game'].forEach(v => {
-            document.getElementById(v).classList.toggle('hidden', v !== id);
-        });
+    function tick() {
+        if (chess.game_over()) return;
+        timers[chess.turn()]--;
+        const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+        document.getElementById('timer-me').innerText = fmt(timers[myColor]);
+        document.getElementById('timer-opp').innerText = fmt(timers[myColor === 'w' ? 'b' : 'w']);
     }
+
+    // --- INIT ---
+    function startAiGame() { saveName(); isAiMode = true; myColor = 'w'; startGame(); }
+    function startGame() { 
+        history.pushState(null, null, window.location.pathname);
+        switchView('view-game'); 
+        renderBoard(); 
+        timerInterval = setInterval(tick, 1000); 
+    }
+    function saveName() { myName = document.getElementById('user-name').value || "Noah"; document.getElementById('me-name').innerText = myName; }
+    function switchView(id) { ['view-menu','view-host','view-join','view-game'].forEach(v => document.getElementById(v).classList.toggle('hidden', v !== id)); }
+    function getPiecePath(t, c) {
+        const map = { pw:'4/45/Chess_plt45', rw:'7/72/Chess_rlt45', nw:'7/70/Chess_nlt45', bw:'b/b1/Chess_blt45', qw:'1/15/Chess_qlt45', kw:'4/42/Chess_klt45',
+                      pb:'c/c7/Chess_pdt45', rb:'f/ff/Chess_rdt45', nb:'e/ef/Chess_ndt45', bb:'9/98/Chess_bdt45', qb:'4/47/Chess_qdt45', kb:'f/f0/Chess_kdt45' };
+        return map[t+c];
+    }
+    function initHost() {
+        saveName(); const id = Math.random().toString(36).substring(2,7).toUpperCase();
+        peer = new Peer(id); document.getElementById('lobby-code').innerText = id; switchView('view-host');
+        peer.on('connection', c => { conn = c; myColor = 'w'; conn.on('open', () => { conn.send({ type: 'init', name: myName }); startGame(); }); });
+    }
+    function showJoin() { saveName(); switchView('view-join'); }
+    function initJoin() {
+        const id = document.getElementById('join-input').value.toUpperCase();
+        peer = new Peer(); peer.on('open', () => { conn = peer.connect(id); myColor = 'b'; conn.on('open', () => { conn.send({ type: 'init', name: myName }); startGame(); }); });
+    }
+    function copyId() { navigator.clipboard.writeText(document.getElementById('lobby-code').innerText); alert("Codice Copiato!"); }
 </script>
 </body>
 </html>
