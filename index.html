@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Noah's Chess Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --accent: #10b981;
+            --accent-dark: #065f46;
+            --light-sq: #e2e8f0;
+            --dark-sq: #64748b;
+            --radius: 20px;
+        }
+
+        * { font-family: 'Outfit', sans-serif; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            background-color: var(--bg);
+            color: white;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #app { width: 95vw; max-width: 500px; display: flex; flex-direction: column; gap: 12px; }
+
+        /* --- UI PANELS --- */
+        .panel {
+            background: var(--surface);
+            padding: 12px 20px;
+            border-radius: var(--radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border: 2px solid transparent;
+            transition: 0.3s;
+        }
+
+        .panel.active { border-color: var(--accent); transform: scale(1.02); box-shadow: 0 0 20px rgba(16, 185, 129, 0.2); }
+        .timer { font-size: 1.8rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .name-label { font-size: 0.8rem; opacity: 0.5; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* --- RIGID BOARD --- */
+        #board-wrapper {
+            width: 100%;
+            aspect-ratio: 1/1;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 5px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        #board-container {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .square { position: relative; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+        .square:hover { filter: brightness(1.1); }
+        .light { background-color: var(--light-sq); }
+        .dark { background-color: var(--dark-sq); }
+        .piece { width: 90%; height: 90%; object-fit: contain; pointer-events: none; z-index: 5; }
+
+        .hint::after {
+            content: ''; width: 24%; height: 24%; background: var(--accent);
+            border-radius: 50%; box-shadow: 0 0 10px var(--accent); position: absolute;
+        }
+
+        /* --- OVERLAYS & INPUTS --- */
+        .overlay { background: var(--surface); padding: 30px; border-radius: var(--radius); text-align: center; }
+        .btn {
+            background: var(--accent); color: var(--bg); border: none; padding: 16px;
+            border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer;
+            width: 100%; margin-top: 10px; transition: 0.2s; box-shadow: 0 4px 0 var(--accent-dark);
+        }
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.1); }
+        .btn:active { transform: translateY(2px); box-shadow: 0 0 0 transparent; }
+
+        input {
+            width: 100%; padding: 14px; border-radius: 10px; border: 2px solid #334155;
+            background: #0f172a; color: var(--accent); text-align: center;
+            font-size: 1.2rem; font-weight: 700; margin-bottom: 10px;
+        }
+
+        #lobby-code-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin: 20px 0; }
+        #lobby-code { color: var(--accent); font-size: 2.2rem; font-weight: 700; letter-spacing: 3px; }
+        .copy-btn { width: auto; padding: 10px 20px; margin: 0; font-size: 0.8rem; }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="view-menu" class="overlay">
+        <h1 style="margin-bottom: 10px;">Noah's Chess</h1>
+        <p style="opacity: 0.6; margin-bottom: 25px;">Personalizza il tuo profilo</p>
+        <input type="text" id="user-name" placeholder="Il tuo nome..." maxlength="12">
+        <button class="btn" onmouseenter="playSfx('hover')" onclick="saveName(); initHost()">HOST GAME</button>
+        <button class="btn" onmouseenter="playSfx('hover')" onclick="saveName(); showJoin()" style="background: transparent; color: white; border: 2px solid #334155; box-shadow: none;">JOIN GAME</button>
+    </div>
+
+    <div id="view-host" class="overlay hidden">
+        <p>Invia il codice all'amico</p>
+        <div id="lobby-code-row">
+            <div id="lobby-code">---</div>
+            <button class="btn copy-btn" id="copy-btn" onclick="copyId()">COPIA</button>
+        </div>
+        <p style="opacity: 0.5;">In attesa di connessione...</p>
+    </div>
+
+    <div id="view-join" class="overlay hidden">
+        <p>Inserisci codice stanza</p>
+        <input type="text" id="join-input" maxlength="5">
+        <button class="btn" onclick="initJoin()">ENTRA</button>
+    </div>
+
+    <div id="view-game" class="hidden">
+        <div id="panel-opp" class="panel">
+            <div><span class="name-label">AVVERSARIO</span><br><b id="opp-display-name">...</b></div>
+            <div class="timer" id="timer-opp">10:00</div>
+        </div>
+
+        <div id="board-wrapper">
+            <div id="board-container"></div>
+        </div>
+
+        <div id="panel-me" class="panel">
+            <div><span class="name-label">TU</span><br><b id="me-display-name">Noah</b></div>
+            <div class="timer" id="timer-me">10:00</div>
+        </div>
+    </div>
+</div>
+
+<audio id="sfx-hover" src="https://assets.mixkit.co/active_storage/sfx/2571/2571-preview.mp3"></audio>
+<audio id="sfx-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3"></audio>
+<audio id="sfx-move" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/audio/move-self.mp3"></audio>
+<audio id="sfx-capture" src="https://images.chesscomfiles.com/chess-themes/pieces/neo/audio/capture.mp3"></audio>
+<audio id="sfx-turn" src="https://assets.mixkit.co/active_storage/sfx/2045/2045-preview.mp3"></audio>
+
+<script>
+    const chess = new Chess();
+    let peer, conn, myColor, myName;
+    let selectedSquare = null;
+    let timers = { w: 600, b: 600 };
+    let timerInterval = null;
+
+    // Inizializzazione Nome
+    window.onload = () => {
+        const saved = localStorage.getItem('noah_chess_name');
+        if (saved) document.getElementById('user-name').value = saved;
+    };
+
+    function saveName() {
+        myName = document.getElementById('user-name').value || "Giocatore";
+        localStorage.setItem('noah_chess_name', myName);
+        document.getElementById('me-display-name').innerText = myName;
+    }
+
+    function playSfx(type) {
+        const audio = document.getElementById('sfx-' + type);
+        audio.currentTime = 0;
+        audio.volume = type === 'hover' ? 0.15 : 0.6;
+        audio.play().catch(() => {});
+    }
+
+    function copyId() {
+        const code = document.getElementById('lobby-code').innerText;
+        navigator.clipboard.writeText(code);
+        const btn = document.getElementById('copy-btn');
+        btn.innerText = "COPIATO!";
+        btn.style.background = "#fff";
+        setTimeout(() => { btn.innerText = "COPIA"; btn.style.background = "var(--accent)"; }, 2000);
+        playSfx('click');
+    }
+
+    function initHost() {
+        const id = Math.random().toString(36).substring(2, 7).toUpperCase();
+        peer = new Peer(id);
+        document.getElementById('lobby-code').innerText = id;
+        switchView('view-host');
+        peer.on('connection', c => { 
+            conn = c; 
+            myColor = 'w'; 
+            conn.on('open', () => {
+                conn.send({ type: 'init', name: myName });
+                startGame();
+            });
+        });
+    }
+
+    function showJoin() { switchView('view-join'); }
+
+    function initJoin() {
+        const id = document.getElementById('join-input').value.toUpperCase();
+        peer = new Peer();
+        peer.on('open', () => {
+            conn = peer.connect(id);
+            myColor = 'b';
+            conn.on('open', () => {
+                conn.send({ type: 'init', name: myName });
+                startGame();
+            });
+        });
+    }
+
+    function startGame() {
+        switchView('view-game');
+        renderBoard();
+        if(!timerInterval) timerInterval = setInterval(tick, 1000);
+
+        conn.on('data', data => {
+            if(data.type === 'init') {
+                document.getElementById('opp-display-name').innerText = data.name;
+            }
+            if(data.type === 'move') {
+                const move = chess.move(data.move);
+                timers = data.timers;
+                renderBoard();
+                playSfx(move.flags.includes('c') ? 'capture' : 'move');
+                if (chess.turn() === myColor) playSfx('turn');
+            }
+        });
+    }
+
+    function tick() {
+        timers[chess.turn()]--;
+        updateTimers();
+        if(timers[chess.turn()] <= 0) { clearInterval(timerInterval); alert("Tempo Scaduto!"); }
+    }
+
+    function updateTimers() {
+        const fmt = s => `${Math.floor(s/60)}:${(s%60).toString().padStart(2, '0')}`;
+        document.getElementById('timer-me').innerText = fmt(timers[myColor]);
+        document.getElementById('timer-opp').innerText = fmt(timers[myColor === 'w' ? 'b' : 'w']);
+    }
+
+    const pieceImgs = (t, c) => `https://upload.wikimedia.org/wikipedia/commons/${{
+        pw:'4/45/Chess_plt45', rw:'7/72/Chess_rlt45', nw:'7/70/Chess_nlt45', bw:'b/b1/Chess_blt45', qw:'1/15/Chess_qlt45', kw:'4/42/Chess_klt45',
+        pb:'c/c7/Chess_pdt45', rb:'f/ff/Chess_rdt45', nb:'e/ef/Chess_ndt45', bb:'9/98/Chess_bdt45', qb:'4/47/Chess_qdt45', kb:'f/f0/Chess_kdt45'
+    }[t+c]}.svg`;
+
+    function renderBoard() {
+        const container = document.getElementById('board-container');
+        container.innerHTML = '';
+        const board = chess.board();
+        
+        document.getElementById('panel-me').classList.toggle('active', chess.turn() === myColor);
+        document.getElementById('panel-opp').classList.toggle('active', chess.turn() !== myColor);
+
+        for (let i = 0; i < 8; i++) {
+            for (let j = 0; j < 8; j++) {
+                const r = myColor === 'b' ? 7 - i : i;
+                const c = myColor === 'b' ? 7 - j : j;
+                const piece = board[r][c];
+                const sq = String.fromCharCode(97 + c) + (8 - r);
+
+                const div = document.createElement('div');
+                div.className = `square ${(r+c)%2===0 ? 'light' : 'dark'}`;
+                div.onmouseenter = () => playSfx('hover');
+                
+                if (piece) {
+                    const img = document.createElement('img');
+                    img.src = pieceImgs(piece.type, piece.color);
+                    img.className = 'piece';
+                    div.appendChild(img);
+                }
+
+                if (selectedSquare === sq) div.style.background = "rgba(16, 185, 129, 0.4)";
+                if (selectedSquare && chess.moves({square: selectedSquare, verbose: true}).some(m => m.to === sq)) {
+                    div.classList.add('hint');
+                }
+
+                div.onclick = () => { playSfx('click'); handleSquare(sq); };
+                container.appendChild(div);
+            }
+        }
+    }
+
+    function handleSquare(sq) {
+        if (chess.turn() !== myColor) return;
+        const piece = chess.get(sq);
+
+        if (piece && piece.color === myColor) {
+            selectedSquare = sq;
+            renderBoard();
+        } else if (selectedSquare) {
+            const move = chess.move({ from: selectedSquare, to: sq, promotion: 'q' });
+            if (move) {
+                playSfx(move.flags.includes('c') ? 'capture' : 'move');
+                conn.send({ type: 'move', move: move, timers: timers });
+                selectedSquare = null;
+                renderBoard();
+            }
+        }
+    }
+
+    function switchView(id) {
+        ['view-menu', 'view-host', 'view-join', 'view-game'].forEach(v => {
+            document.getElementById(v).classList.toggle('hidden', v !== id);
+        });
+    }
+</script>
+</body>
+</html>
